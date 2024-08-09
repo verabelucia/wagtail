@@ -2,13 +2,17 @@ from io import BytesIO
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
-
+from django.core.files.base import ContentFile
+from wagtail.images.models import Image
+from django.template import Template, Context
+from django.test import TestCase
 from wagtail import hooks
 from wagtail.images import image_operations
 from wagtail.images.exceptions import (
     InvalidFilterSpecError,
     UnknownOutputImageFormatError,
 )
+from wagtail.images.templatetags.wagtailimages_tags import SrcsetImageNode
 from wagtail.images.image_operations import TransformOperation
 from wagtail.images.models import Filter, Image
 from wagtail.images.tests.utils import (
@@ -1065,3 +1069,26 @@ class TestCheckSize(TestCase):
                 (1, 1), allow_floating_point=False
             )
         )
+class SrcsetImageNodeTestCase(TestCase):
+    def test_get_filters_with_svg(self):
+        node = SrcsetImageNode(image_expr=None, filter_specs=["format-{avif,jpeg}"], preserve_svg=True)
+        filters = node.get_filters(preserve_svg=True)
+        filter_specs = [f.spec for f in filters]
+        self.assertEqual(len(filter_specs), len(set(filter_specs)), "Filter specs should be unique")
+
+class ImageRenderTestCase(TestCase):
+    def setUp(self):
+        self.image = self.create_svg_image()
+
+    def create_svg_image(self):
+        svg_content = """<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+                            <rect width="100" height="100" fill="blue"/>
+                         </svg>"""
+        image_file = ContentFile(svg_content.encode('utf-8'), name='test.svg')
+        return Image.objects.create(title="Test SVG", file=image_file)
+
+    def test_svg_image_rendering(self):
+        template = Template('{% load wagtailimages_tags %}{% picture image format-{avif,jpeg} fill-{200x100,400x200}-c100 preserve-svg %}')
+        context = Context({'image': self.image})
+        rendered = template.render(context)
+        self.assertIn('<picture>', rendered)
