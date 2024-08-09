@@ -168,8 +168,10 @@ class SrcsetImageNode(ImageNode):
     def get_filters(self, preserve_svg=False):
         filter_specs = Filter.expand_spec(self.filter_specs)
         if preserve_svg:
-            return [Filter(to_svg_safe_spec(f)) for f in filter_specs]
+            unique_specs = list(set(to_svg_safe_spec(f) for f in filter_specs))
+            return [Filter(spec=f) for f in unique_specs]
         return [Filter(spec=f) for f in filter_specs]
+
 
     def render(self, context):
         image = self.validate_image(context)
